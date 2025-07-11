@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         Gmail Premium UI Suite (v5.0 - Dynamic Collapse & Nuclear Headers)
-// @namespace    http://tampermonkey.net/
+// @name         Gmail Premium UI Suite
+// @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
 // @version      5.0
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
-// @author       Your Name (based on original script)
+// @author       Matthew Parker
 // @match        https://mail.google.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.user.js
+// @updateURL    https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.meta.js
 // @run-at       document-idle
 // ==/UserScript==
 
