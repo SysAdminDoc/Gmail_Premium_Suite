@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      5.6
+// @version      5.9
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
@@ -10,19 +10,19 @@
 // @grant        GM_xmlhttpRequest
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.user.js
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.meta.js
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function() {
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V5.6 UPDATES ~
+    //  ~ V5.9 UPDATES ~
     //
-    //  1. Granular "Nuke" Controls:
-    //     - Added sub-options to individually show/hide From, Cc, and Bcc
-    //       lines when using the simple metadata header.
-    //     - The script now also removes Gmail's native <hr> divider.
+    //  1. Dark Loading Screen:
+    //     - Added a new feature to apply a dark theme to the initial Gmail
+    //       loading screen, preventing a flash of white for dark mode users.
+    //     - Changed @run-at to document-start to apply styles immediately.
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -100,6 +100,7 @@
 
             // Themes
             gmailDarkMode: false,
+            darkLoadingScreen: true,
 
             // Layout
             customCSS: true,
@@ -149,6 +150,7 @@
             nukeReplyMetadataSimple: false,
             nukeReplyMetadataShowCc: false,
             nukeReplyMetadataShowBcc: false,
+            hideReactionButton: true,
             hideAllSignaturesInChain: true,
         },
         async load() {
@@ -227,27 +229,17 @@
         }, {
             id: 'squarifyTheme',
             name: 'Squarify UI Elements',
-            description: 'Removes rounded corners from buttons, panels, and other elements for a sharp, squared-off look.',
+            description: 'Removes rounded corners from all elements for a sharp, squared-off look.',
             group: 'UI & Visuals',
             _styleElement: null,
             init() {
                 this._styleElement = document.createElement('style');
                 this._styleElement.id = 'gm-squarify-theme';
                 this._styleElement.textContent = `
-                .aic .T-I, .z0 .L3, .wT .TO, .wT .ah9, .gb_Te, #aso_search_form_anchor,
-                .SK.ZF-zT, .bAp.b8.UC .vh, .brc, .ar, .aOd.T-I, .Kj-JD, .bug,
-                .J-M, .t9, .d-Na-JG-M, .vR > .vN, #gm-floating-settings-btn,
-                .gm-panel, .aB.gB, .gb_C, .VfPpkd-LgbsSe, .J-at1-auR, .T-I,
-                .dC, .lJradf.XQuz9d,
-                .agh .afV,
-                .ams.bkH, .ams.bkG
-                {
-                    border-radius: 0 !important;
-                }
-                .agh .afV {
-                    border: 1px solid #444 !important;
-                }
-            `;
+                    *, *::before, *::after {
+                        border-radius: 0 !important;
+                    }
+                `;
                 document.head.appendChild(this._styleElement);
             },
             destroy() {
@@ -401,6 +393,29 @@
                 this._styleElement?.remove();
                 this._styleElement = null;
             },
+        },
+        {
+            id: 'darkLoadingScreen',
+            name: 'Dark Loading Screen',
+            description: 'Applies a dark theme to the initial loading screen to prevent a white flash.',
+            group: 'Themes',
+            _styleElement: null,
+            init() {
+                this._styleElement = document.createElement('style');
+                this._styleElement.id = 'gm-dark-loading-screen';
+                this._styleElement.textContent = `
+                    #loading, #stb {
+                        background-color: #1f1f1f !important;
+                    }
+                    .msg, .msgb, #loading a {
+                        color: #ccc !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(this._styleElement);
+            },
+            destroy() {
+                this._styleElement?.remove();
+            }
         },
 
         // Group: Layout
@@ -1124,6 +1139,27 @@
             },
         },
         {
+            id: 'hideReactionButton',
+            name: 'Hide "Add reaction" button',
+            group: 'Email Thread Declutter',
+            description: "Hides the emoji reaction button that appears on individual emails.",
+            _styleElement: null,
+            init() {
+                this._styleElement = document.createElement('style');
+                this._styleElement.id = 'gm-hide-reactions';
+                this._styleElement.textContent = `
+                    button[aria-label="Add reaction"], 
+                    div.wrsVRe { 
+                        display: none !important; 
+                    }
+                `;
+                document.head.appendChild(this._styleElement);
+            },
+            destroy() {
+                this._styleElement?.remove();
+            },
+        },
+        {
             id: 'hideAllSignaturesInChain',
             name: 'Hide All Signatures in Reply Chain',
             description: 'Removes all standard, legacy, and device signatures from the entire reply chain.',
@@ -1249,7 +1285,7 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v5.6';
+        version.textContent = 'v5.9';
         header.append(title, version);
 
         const main = document.createElement('main');
@@ -1465,38 +1501,50 @@
     async function main() {
         appState.settings = await settingsManager.load();
 
-        injectStyles();
-        buildPanel(appState);
+        // The dark loading screen needs to run immediately, before the full UI loads
+        if (appState.settings.darkLoadingScreen) {
+            features.find(f => f.id === 'darkLoadingScreen').init();
+        }
 
-        features.forEach(f => {
-            if (appState.settings[f.id]) {
-                try {
-                    f.init();
-                } catch (error) {
-                    console.error(`[Gmail Premium] Error initializing feature "${f.id}":`, error);
-                }
+        const bootstrapObserver = new MutationObserver((mutations, obs) => {
+            if (document.querySelector('.nH.bkK')) {
+                obs.disconnect();
+                
+                // Initialize all other features once the main UI is ready
+                injectStyles();
+                buildPanel(appState);
+
+                features.forEach(f => {
+                    // Skip the dark loading screen since it's already running
+                    if (f.id === 'darkLoadingScreen') return;
+
+                    if (appState.settings[f.id]) {
+                        try {
+                            f.init();
+                        } catch (error) {
+                            console.error(`[Gmail Premium] Error initializing feature "${f.id}":`, error);
+                        }
+                    }
+                });
+
+                // Show the panel on first run
+                settingsManager.getFirstRunStatus().then(hasRun => {
+                    if (!hasRun) {
+                        document.body.classList.add('gm-panel-open');
+                        settingsManager.setFirstRunStatus(true);
+                    }
+                });
             }
         });
 
-        const hasRun = await settingsManager.getFirstRunStatus();
-        if (!hasRun) {
-            document.body.classList.add('gm-panel-open');
-            await settingsManager.setFirstRunStatus(true);
-        }
+        bootstrapObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 
-    const bootstrapObserver = new MutationObserver((mutations, obs) => {
-        if (document.querySelector('.nH.bkK')) {
-            obs.disconnect();
-            main().catch(error => {
-                console.error("[Gmail Premium] Failed to initialize:", error);
-            });
-        }
-    });
-
-    bootstrapObserver.observe(document.body, {
-        childList: true,
-        subtree: true
+    main().catch(error => {
+        console.error("[Gmail Premium] Failed to initialize:", error);
     });
 
 })();
