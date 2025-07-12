@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      5.1
+// @version      5.6
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
@@ -17,11 +17,12 @@
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V5.1 UPDATES ~
+    //  ~ V5.6 UPDATES ~
     //
-    //  1. Gmail Native Dark Mode:
-    //     - Replaced the old CSS-based dark theme with a new option that injects
-    //       Gmail's own dark mode CSS file directly for a more authentic theme.
+    //  1. Granular "Nuke" Controls:
+    //     - Added sub-options to individually show/hide From, Cc, and Bcc
+    //       lines when using the simple metadata header.
+    //     - The script now also removes Gmail's native <hr> divider.
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -98,7 +99,7 @@
             styleDateTime: true,
 
             // Themes
-            gmailDarkMode: false, // New setting for native dark mode
+            gmailDarkMode: false,
 
             // Layout
             customCSS: true,
@@ -130,6 +131,7 @@
             hideAskGemini: false,
             hideLoomButton: true,
             hideSummarizeEmail: true,
+            hideSmartFeaturesBanner: true,
 
             // Declutter
             hideOrgWarnings: true,
@@ -144,6 +146,9 @@
 
             // Email Thread Declutter
             nukeReplyMetadata: true,
+            nukeReplyMetadataSimple: false,
+            nukeReplyMetadataShowCc: false,
+            nukeReplyMetadataShowBcc: false,
             hideAllSignaturesInChain: true,
         },
         async load() {
@@ -824,6 +829,23 @@
             }
         },
         {
+            id: 'hideSmartFeaturesBanner',
+            name: 'Hide "Smart Features" Banner',
+            description: 'Hides the top banner prompting to "Turn on smart features".',
+            group: 'AI & Tools',
+            _styleElement: null,
+            init() {
+                this._styleElement = document.createElement('style');
+                this._styleElement.id = 'gm-hide-smart-features-banner';
+                // The class .ahS seems to be the primary container for this banner.
+                this._styleElement.textContent = `.ahS { display: none !important; }`;
+                document.head.appendChild(this._styleElement);
+            },
+            destroy() {
+                this._styleElement?.remove();
+            }
+        },
+        {
             id: 'hideLoomButton',
             name: 'Hide Loom Button',
             description: 'Hides the Loom recording button in the compose window toolbar.',
@@ -979,47 +1001,124 @@
             },
         },
 
-        // GROUP: Email Thread Declutter (v5.0)
+        // GROUP: Email Thread Declutter
         {
             id: 'nukeReplyMetadata',
             name: 'Nuke Reply Metadata',
             group: 'Email Thread Declutter',
             description: 'Aggressively finds and replaces all reply/forward headers with a divider.',
             init() {
-                const processMetadataBlock = (div) => {
+                const featId = this.id;
+                const gmailDividerSelector = 'hr[style*="display:inline-block"][style*="width:98%"]';
+
+                const processMetadataBlock = div => {
                     if (div.dataset.gmProcessed) return;
+                    div.dataset.gmProcessed = 'true';
 
+                    const text = div.textContent
+                        .split('\n')
+                        .map(line => line.trim())
+                        .filter(line => line)
+                        .join(' ');
+
+                    // Parse From
+                    const fromMatch = text.match(/From:\s*(.*?)\s*<([^>]+)>/i);
+                    let name = '', email = '';
+                    if (fromMatch) {
+                        name = fromMatch[1].trim();
+                        email = fromMatch[2].trim();
+                    }
+
+                    // Parse Cc
+                    const ccMatch = text.match(/Cc:\s*(.*?)\s*<([^>]+)>/i);
+                    let ccName = '', ccEmail = '';
+                    if (ccMatch) {
+                        ccName = ccMatch[1].trim();
+                        ccEmail = ccMatch[2].trim();
+                    }
+
+                    // Parse Bcc
+                    const bccMatch = text.match(/Bcc:\s*(.*?)\s*<([^>]+)>/i);
+                    let bccName = '', bccEmail = '';
+                    if (bccMatch) {
+                        bccName = bccMatch[1].trim();
+                        bccEmail = bccMatch[2].trim();
+                    }
+
+                    // Hide full metadata
                     div.style.display = 'none';
-                    div.dataset.gmHiddenBy = this.id;
-                    div.dataset.gmProcessed = 'true'; // Mark as processed
+                    div.dataset.gmHiddenBy = featId;
 
+                    // Insert custom dashed divider
                     const hr = document.createElement('hr');
-                    hr.style.cssText = 'border: none; border-top: 2px dashed #5e97f6; margin: 12px 0;';
-                    hr.dataset.gmHiddenBy = this.id + '_hr';
+                    hr.style.cssText = 'border:none; border-top:2px dashed #5e97f6; margin:12px 0';
+                    hr.dataset.gmHiddenBy = `${featId}_hr`;
                     div.parentNode.insertBefore(hr, div);
+
+                    // Inject simple lines in order: From, Cc, Bcc
+                    let last = hr;
+                    if (appState.settings.nukeReplyMetadataSimple && email) {
+                        const simpleFrom = document.createElement('div');
+                        simpleFrom.dataset.gmHiddenBy = `${featId}_simple`;
+                        simpleFrom.style.cssText = 'margin:4px 0 12px; font-size:12px; color:#999';
+                        simpleFrom.innerHTML = `<strong>From:</strong> <a href="mailto:${email}" style="color:#8ab4f8; text-decoration:none;">${name || email}</a>`;
+                        last.insertAdjacentElement('afterend', simpleFrom);
+                        last = simpleFrom;
+                    }
+                    if (appState.settings.nukeReplyMetadataShowCc && ccEmail) {
+                        const simpleCc = document.createElement('div');
+                        simpleCc.dataset.gmHiddenBy = `${featId}_cc`;
+                        simpleCc.style.cssText = 'margin:4px 0 12px; font-size:12px; color:#999';
+                        simpleCc.innerHTML = `<strong>Cc:</strong> <a href="mailto:${ccEmail}" style="color:#8ab4f8; text-decoration:none;">${ccName || ccEmail}</a>`;
+                        last.insertAdjacentElement('afterend', simpleCc);
+                        last = simpleCc;
+                    }
+                    if (appState.settings.nukeReplyMetadataShowBcc && bccEmail) {
+                        const simpleBcc = document.createElement('div');
+                        simpleBcc.dataset.gmHiddenBy = `${featId}_bcc`;
+                        simpleBcc.style.cssText = 'margin:4px 0 12px; font-size:12px; color:#999';
+                        simpleBcc.innerHTML = `<strong>Bcc:</strong> <a href="mailto:${bccEmail}" style="color:#8ab4f8; text-decoration:none;">${bccName || bccEmail}</a>`;
+                        last.insertAdjacentElement('afterend', simpleBcc);
+                    }
                 };
 
-                const findAndProcessMetadata = (rootNode) => {
+                const findAndProcessMetadata = rootNode => {
                     if (!rootNode.querySelectorAll) return;
 
-                    // Find any div whose id contains "divRplyFwdMsg" inside a blockquote
-                    rootNode.querySelectorAll('blockquote div[id*="divRplyFwdMsg"]').forEach(processMetadataBlock);
+                    // RULE 0: Remove Gmail’s default divider
+                    rootNode.querySelectorAll(gmailDividerSelector).forEach(el => el.remove());
 
-                    // Bonus: also catch the “---------- Forwarded message ---------” header
-                    rootNode.querySelectorAll('blockquote *').forEach(el => {
+                    // Find and process all other metadata blocks
+                    const selectors = [
+                        'blockquote div[id*="divRplyFwdMsg"]',
+                        'div.gmail_quote',
+                        'div[style*="1pt solid"]',
+                        'p',
+                        'blockquote *'
+                    ];
+                    rootNode.querySelectorAll(selectors.join(',')).forEach(el => {
                         const txt = el.textContent.trim();
-                        if (/^-+ Forwarded message -+$/i.test(txt)) {
+                        if (
+                            el.matches('blockquote div[id*="divRplyFwdMsg"], div.gmail_quote') ||
+                            /^-+ Forwarded message -+$/i.test(txt) ||
+                            /^On\s.+\swrote:$/i.test(txt) ||
+                            (el.tagName === 'P' &&
+                                txt.includes('From:') && txt.includes('Sent:') &&
+                                txt.includes('To:') && txt.includes('Subject:')) ||
+                            (el.matches('div[style*="1pt solid"]') && txt.includes('From:'))
+                        ) {
                             processMetadataBlock(el);
                         }
                     });
                 };
 
-                addHidingRule(this.id, findAndProcessMetadata);
+                addHidingRule(featId, findAndProcessMetadata);
             },
             destroy() {
-                // First remove our custom dividers
-                document.querySelectorAll(`[data-gm-hidden-by="${this.id}_hr"]`).forEach(hr => hr.remove());
-                // Then restore the original elements
+                document.querySelectorAll(`[data-gm-hidden-by="${this.id}_simple"]`).forEach(el => el.remove());
+                document.querySelectorAll(`[data-gm-hidden-by="${this.id}_cc"]`).forEach(el => el.remove());
+                document.querySelectorAll(`[data-gm-hidden-by="${this.id}_bcc"]`).forEach(el => el.remove());
+                document.querySelectorAll(`[data-gm-hidden-by="${this.id}_hr"]`).forEach(el => el.remove());
                 removeHidingRule(this.id);
                 document.querySelectorAll('[data-gm-processed]').forEach(el => el.removeAttribute('data-gm-processed'));
             },
@@ -1031,8 +1130,6 @@
             init() {
                 const hideSignatures = (rootNode) => {
                     if (!rootNode.querySelectorAll) return;
-
-                    // Legacy table-based signatures with a top border
                     rootNode.querySelectorAll('blockquote td[style*="border-top"]').forEach(td => {
                         const tbl = td.closest('table');
                         if (tbl && tbl.style.display !== 'none') {
@@ -1040,16 +1137,12 @@
                             tbl.dataset.gmHiddenBy = this.id;
                         }
                     });
-
-                    // Modern signatures based on Gmail classes
                     rootNode.querySelectorAll('blockquote .gmail_signature_prefix, blockquote .gmail_signature').forEach(el => {
                         if (el.style.display !== 'none') {
                             el.style.display = 'none';
                             el.dataset.gmHiddenBy = this.id;
                         }
                     });
-
-                    // Device signatures ("Sent from my iPhone", etc.)
                     function hideNodeAndPrevBr(node) {
                         if (node.style.display !== 'none') {
                             node.style.display = 'none';
@@ -1156,11 +1249,45 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v5.1';
+        version.textContent = 'v5.6';
         header.append(title, version);
 
         const main = document.createElement('main');
         const groupOrder = ['UI & Visuals', 'Themes', 'Header Elements', 'Email Thread Declutter', 'Layout', 'Productivity', 'Hubspot', 'AI & Tools', 'Declutter'];
+
+        const createSubSetting = (id, name, description, parentInput) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'gm-switch-wrapper gm-sub-setting-wrapper';
+            wrapper.dataset.tooltip = description;
+            const label = document.createElement('label');
+            label.className = 'gm-switch';
+            label.htmlFor = `switch-${id}`;
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = `switch-${id}`;
+            input.checked = appState.settings[id];
+            input.onchange = async (e) => {
+                appState.settings[id] = e.target.checked;
+                const parentFeat = features.find(x => x.id === 'nukeReplyMetadata');
+                parentFeat.destroy();
+                if (appState.settings.nukeReplyMetadata) {
+                    parentFeat.init();
+                }
+                await settingsManager.save(appState.settings);
+            };
+            const slider = document.createElement('span');
+            slider.className = 'slider';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'label';
+            nameSpan.textContent = name;
+            label.append(input, slider);
+            wrapper.append(label, nameSpan);
+            wrapper.style.display = parentInput.checked ? 'flex' : 'none';
+            parentInput.addEventListener('change', (e) => {
+                wrapper.style.display = e.target.checked ? 'flex' : 'none';
+            });
+            return wrapper;
+        };
 
         groupOrder.forEach(groupName => {
             if (!groups[groupName] || groups[groupName].length === 0) return;
@@ -1185,9 +1312,12 @@
                 input.checked = appState.settings[f.id];
                 input.onchange = async (e) => {
                     const id = e.target.dataset.featureId;
-                    const feat = features.find(x => x.id === id);
                     appState.settings[id] = e.target.checked;
-                    appState.settings[id] ? feat.init() : feat.destroy();
+                    const feat = features.find(x => x.id === id);
+                    feat.destroy();
+                    if (appState.settings[id]) {
+                        feat.init();
+                    }
                     await settingsManager.save(appState.settings);
                 };
                 const slider = document.createElement('span');
@@ -1199,6 +1329,13 @@
                 label.append(input, slider);
                 wrapper.append(label, nameSpan);
                 fieldset.appendChild(wrapper);
+
+                if (f.id === 'nukeReplyMetadata') {
+                    const fromSub = createSubSetting('nukeReplyMetadataSimple', "Show simple 'From:' header", "Replaces the divider with a simple 'From: Name <email>' line.", input);
+                    const ccSub = createSubSetting('nukeReplyMetadataShowCc', "Show Cc:", "Also show the Cc: line if available.", input);
+                    const bccSub = createSubSetting('nukeReplyMetadataShowBcc', "Show Bcc:", "Also show the Bcc: line if available.", input);
+                    fieldset.append(fromSub, ccSub, bccSub);
+                }
             });
             main.appendChild(fieldset);
         });
@@ -1302,6 +1439,7 @@
             .gm-switch input:checked + .slider:before { transform: translateX(18px); }
             .gm-switch-wrapper::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 8px; background: #111; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 1; }
             .gm-switch-wrapper:hover::after { opacity: 1; }
+            .gm-sub-setting-wrapper { margin-left: 20px; }
             .gm-footer-controls { display: flex; gap: 10px; }
             .gm-btn-primary { background-color: var(--gm-accent-color, #5e97f6); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-family: var(--panel-font); font-weight: 500; cursor: pointer; transition: background-color .2s; }
             .gm-btn-primary:hover { background-color: #4a80d3; }
