@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      5.0
+// @version      5.1
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.user.js
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/MailPro-Enhancement-Suite/main/Gmail%20Premium%20UI%20Suite.meta.js
 // @run-at       document-idle
@@ -16,17 +17,11 @@
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V5.0 UPDATES ~
+    //  ~ V5.1 UPDATES ~
     //
-    //  1. Dynamic Chat Sidebar Collapse:
-    //     - Replaced the CSS-based chat collapse with a more robust JS version that
-    //       dynamically finds the correct navigation panel to avoid partial collapse issues.
-    //
-    //  2. "Nuclear" Reply Header Hiding:
-    //     - Upgraded the "Hide Reply Headers" feature with a more aggressive "nuke"
-    //       function. It now scans all elements inside a reply for text-based
-    //       patterns (From/Sent/Subject) and replaces them with a custom divider,
-    //       bypassing reliance on specific element IDs or classes.
+    //  1. Gmail Native Dark Mode:
+    //     - Replaced the old CSS-based dark theme with a new option that injects
+    //       Gmail's own dark mode CSS file directly for a more authentic theme.
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -100,8 +95,10 @@
             squarifyTheme: false,
             animatedCompose: true,
             animatedStars: true,
-            themeToggle: true,
             styleDateTime: true,
+
+            // Themes
+            gmailDarkMode: false, // New setting for native dark mode
 
             // Layout
             customCSS: true,
@@ -152,7 +149,7 @@
         async load() {
             let savedSettings = await GM_getValue('gmPremiumSettings', {});
             // Clean up old settings from previous versions
-            const oldKeys = ['hideReplyHeaders', 'hideSignaturesInReplies', 'hideDeviceSignatures', 'hideOutlookMobileSignature', 'hideReplyForwardMetadata', 'hideExternalSignatures', 'hideMySignatureInChains', 'mySignatureKeywords'];
+            const oldKeys = ['hideReplyHeaders', 'hideSignaturesInReplies', 'hideDeviceSignatures', 'hideOutlookMobileSignature', 'hideReplyForwardMetadata', 'hideExternalSignatures', 'hideMySignatureInChains', 'mySignatureKeywords', 'themeToggle'];
             oldKeys.forEach(key => {
                 if (savedSettings.hasOwnProperty(key)) {
                     delete savedSettings[key];
@@ -365,29 +362,39 @@
 
         // Group: Themes
         {
-            id: 'themeToggle',
-            name: 'Default Dark Theme',
-            description: 'Applies the standard global dark or light theme.',
+            id: 'gmailDarkMode',
+            name: 'Enable Gmail Dark Mode',
+            description: "Toggles Gmail's native dark theme by injecting its CSS file.",
             group: 'Themes',
             _styleElement: null,
             init() {
+                if (this._styleElement) return;
                 this._styleElement = document.createElement('style');
-                this._styleElement.id = 'gm-theme';
-                this._styleElement.textContent = `
-                :root { --gm-theme-bg: #1f1f1f; --gm-theme-fg: #e8e8e8; --gm-panel-bg: #2c2c2c; --gm-panel-fg: #f0f0f0; --gm-border-color: #444; --gm-accent-color: #5e97f6; }
-                body[data-gm-theme="light"] { --gm-theme-bg: #ffffff; --gm-theme-fg: #202124; --gm-panel-bg: #f8f9fa; --gm-panel-fg: #202124; --gm-border-color: #dfe1e5; }
-                body { background-color: var(--gm-theme-bg) !important; color: var(--gm-theme-fg) !important; }
-                #loading, #stb { background-color: #1f1f1f !important; }
-                .msg, .msgb { color: #e8e8e8 !important; }
-                .afW.WeJhwb { background-color: #2a2a2a !important; }
-                .af6, .afY { color: #ccc !important; }
-            `;
+                this._styleElement.id = 'gm-native-dark-theme';
                 document.head.appendChild(this._styleElement);
-                document.body.dataset.gmTheme = 'dark';
+
+                const CSS_URL = 'https://mail.google.com/_/scs/mail-static/_/ss/k=gmail.main.C6cicS7fXaU.L.W.O/am=qAEDHAAA-MDlf76A_0qMPQAADPjX-f7VB_7Mb3huMgSy4CECRgQSBegDIhMFfyLy4XWs2-Ay7OMPCQAIQLsjm_04SIQtNH7UOoROacJlGAEAAAAAAAAAAAAAAAAAAAAeHgIC/d=1/excm=at/rs=AHGWq9DdJea2KTVAzJaogOueR9p3iW7rWQ';
+
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: CSS_URL,
+                    onload: (response) => {
+                        if (response.status === 200 && this._styleElement) {
+                            this._styleElement.textContent = response.responseText;
+                        } else {
+                            console.error('[Gmail Premium] Failed to load dark mode CSS.');
+                            showToast('Failed to load dark mode CSS.', true);
+                        }
+                    },
+                    onerror: () => {
+                        console.error('[Gmail Premium] Error fetching dark mode CSS.');
+                        showToast('Error fetching dark mode CSS.', true);
+                    }
+                });
             },
             destroy() {
                 this._styleElement?.remove();
-                delete document.body.dataset.gmTheme;
+                this._styleElement = null;
             },
         },
 
@@ -1149,7 +1156,7 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v5.0';
+        version.textContent = 'v5.1';
         header.append(title, version);
 
         const main = document.createElement('main');
@@ -1192,18 +1199,6 @@
                 label.append(input, slider);
                 wrapper.append(label, nameSpan);
                 fieldset.appendChild(wrapper);
-
-                if (f.id === 'themeToggle') {
-                    const themeLinkWrapper = document.createElement('div');
-                    themeLinkWrapper.className = 'gm-sub-setting-wrapper';
-                    const themeLink = document.createElement('a');
-                    themeLink.href = 'https://mail.google.com/mail/u/0/#settings/oldthemes';
-                    themeLink.target = '_blank';
-                    themeLink.textContent = "Click here and choose the 'Dark' theme for best results.";
-                    themeLink.className = 'gm-sub-setting-link';
-                    themeLinkWrapper.appendChild(themeLink);
-                    fieldset.appendChild(themeLinkWrapper);
-                }
             });
             main.appendChild(fieldset);
         });
@@ -1284,7 +1279,7 @@
         const style = document.createElement('style');
         style.textContent = `
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-            :root { --panel-font: 'Inter', sans-serif; --panel-radius: 12px; --panel-shadow: 0 10px 30px -5px rgba(0,0,0,0.3); }
+            :root { --panel-font: 'Inter', sans-serif; --panel-radius: 12px; --panel-shadow: 0 10px 30px -5px rgba(0,0,0,0.3); --gm-panel-bg: #2c2c2c; --gm-panel-fg: #f0f0f0; --gm-border-color: #444; --gm-accent-color: #5e97f6; }
             body.gm-panel-open #gm-panel-container .gm-panel-overlay { opacity: 1; pointer-events: auto; }
             .gm-panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 10000; opacity: 0; pointer-events: none; transition: opacity .3s ease; }
             .gm-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95); width: 90%; max-width: 520px; background: var(--gm-panel-bg, #2c2c2c); color: var(--gm-panel-fg, #f0f0f0); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); font-family: var(--panel-font); opacity: 0; pointer-events: none; transition: opacity .3s ease, transform .3s ease; z-index: 10001; display: flex; flex-direction: column; }
@@ -1307,9 +1302,6 @@
             .gm-switch input:checked + .slider:before { transform: translateX(18px); }
             .gm-switch-wrapper::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 8px; background: #111; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 1; }
             .gm-switch-wrapper:hover::after { opacity: 1; }
-            .gm-sub-setting-wrapper { margin: -5px 0 10px 52px; }
-            .gm-sub-setting-link { font-size: 12px; color: #aaa; text-decoration: none; }
-            .gm-sub-setting-link:hover { text-decoration: underline; color: #ccc; }
             .gm-footer-controls { display: flex; gap: 10px; }
             .gm-btn-primary { background-color: var(--gm-accent-color, #5e97f6); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-family: var(--panel-font); font-weight: 500; cursor: pointer; transition: background-color .2s; }
             .gm-btn-primary:hover { background-color: #4a80d3; }
