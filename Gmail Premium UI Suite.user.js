@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      6.5
+// @version      6.9
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
@@ -17,12 +17,11 @@
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V6.5 UPDATES ~
+    //  ~ V6.9 UPDATES ~
     //
-    //  1. New Feature - Flatten Reply Indentation:
-    //     - Added a new option under "Email Thread Declutter" to remove all
-    //       indentation and vertical lines from quoted replies, creating a
-    //       single, flat column for the conversation.
+    //  1. Refined Dark Mode Pane:
+    //     - Added new styles to the dark email pane for icon and background
+    //       consistency (e.g., white reply/star icons).
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -100,6 +99,7 @@
 
             // Themes
             gmailDarkMode: false,
+            gmailDarkModePane: true,
 
             // Layout
             customCSS: true,
@@ -367,6 +367,7 @@
             group: 'Themes',
             _styleElement: null,
             _loadingStyleElement: null,
+            _paneStyleElement: null,
             preInit() {
                 // This part runs immediately at document-start to prevent the white flash
                 this._loadingStyleElement = document.createElement('style');
@@ -445,12 +446,167 @@
                 `;
 
                  document.head.appendChild(this._styleElement);
+
+                // Add dark email pane if enabled
+                if (appState.settings.gmailDarkModePane) {
+                    this._paneStyleElement = document.createElement('style');
+                    this._paneStyleElement.id = 'gm-dark-email-view';
+                    this._paneStyleElement.textContent = `
+                        .HM .ahe::before {
+                            border: 0px !important;
+                        }
+
+                        /* compose button */
+                        .J-M,
+                        [role="navigation"] [role="button"]
+                        {
+                            background-color: #333 !important;
+                            box-shadow: none !important;
+                            border: 1px solid #222 !important;
+                            color: #ddd !important;
+                        }
+
+                        /* dropdowns */
+                        .bAp.b8.UC .vh, .ajA, .nH .Hy .m, .J-N-JT, .J-JK-JT, .J-LC-JT,
+                        form[role="search"], form[role="search"] table, form[role="search"] div, form[role="search"] td
+                        {
+                            background-color: #1c1c1c !important;
+                        }
+
+                        .az9, .agP, .aoU, .az4, .aoI, .aoT, .Hp, .nH .Hy .m, .J-N-Jz, .J-JK-Jz,
+                        [role="menuitemcheckbox"], form[role="search"], form[role="search"] table,
+                        form[role="search"] div, form[role="search"] td
+                        {
+                            color: #ddd !important;
+                        }
+
+                        .ZF-z6, .ZF-zT, .ZF-Av .lJ, .ZF-Av .lN, .aaZ, .aoT, .la-k .la-m,
+                        #loading, .HM .ahe::after, .aDg > .aDj, .azX, .nr, .iY, .IG, .GQ, .Ap,
+                        .aoP .Ar, .Am, .aDg > .aDj, .J-Z, .aC3, .aC2, .aDg > .aDj,
+                        .HM .ahe::before, .agP, .agh, .bbV, .aGb, .wO
+                        {
+                            background-color: #222 !important;
+                        }
+
+                        .HM .I5 {
+                            border: 1px solid #444 !important;
+                        }
+
+                        .afC, .nr, [aria-label="Search mail"], .amn > .ams, .az9 .aDp, .IG .Iy .az9 {
+                            color: #999 !important;
+                        }
+
+                        .az9, .im {
+                            color: #666 !important;
+                        }
+
+                        /* text */
+                        .bs1 + .bs3, .btj + .aD, .ado b, .hx, .hx .gD, .hx .hb, .ac2, .IG,
+                        .Am, .ha > .hP, .gt, .gt div, .gt p, .gt h1, .gt h2, .gt h3, .gt h4,
+                        .gt h5, .gt h6, .gt figcaption, .gt td, .gt span, .gt font, .msgb,
+                        .J-M, .J-N, .agd .J-M-JJ input
+                        {
+                            color: #ddd !important;
+                        }
+
+                        .agd .J-M-JJ input, .la-i div, [role="navigation"] [role="button"],
+                        .aYy, .gt figcaption
+                        {
+                            background-color: #1c1c1c !important;
+                            border-radius: 4px;
+                        }
+
+                        .gsib_a.gb_jf.aJh, form[role="search"] tr:hover td,
+                        form[role="search"] tr:hover td div,
+                        .gt div:not(.aYy):not([role="button"]):not([role="menu"]):not([role="menuitemcheckbox"]):not([role="menuitem"]),
+                        .gt td, .gt span, .gt table, .gt h1, .gt h2, .gt h3, .gt h4, .gt h5, .gt h6,
+                        .gt table tbody tr td, .gt a, .gt p, .gt ul, .gt li, .gt center,
+                        [bgcolor] *, .gstt tbody tr td table tbody tr:hover,
+                        form[role="search"] div .gstt tbody tr:hover
+                        {
+                            background-color: transparent !important;
+                        }
+
+                        .afC, .afA, .agJ, .adp, .h9, .adI, .aHn
+                        {
+                            background-color: #1c1c1c !important;
+                        }
+
+                        .btb, .zA:hover, .afC {
+                            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .3),0 4px 8px 3px rgba(0, 0, 0, .15);
+                        }
+
+                        .hG.T-I-atl, .hG.T-I-atl.T-I-JW, .hG.T-I-atl:focus {
+                            border-color: #000 !important;
+                        }
+
+                        /* message links */
+                        .Ol.Nk, .msgb input, .adI .B9, .h8, .gt a {
+                            color: #8bc4ff !important;
+                        }
+
+                        /* toolbar */
+                        .Hl, .Hq, .Ha, [role="menuitemcheckbox"] > div > div,
+                        [role="listbox"] .J-Z-M-I-J6-H > .J-Z-M-I-JG, div.ajR .ajT,
+                        .btC .dv, .btC .aaA.a1, .btC .J-N-JX.a1, .btC .aaA.e5, .aaZ .J-N-JX.e5,
+                        .btC .aaA.QT, .btC .J-N-JX.QT, .btC .aaA.aA7, .aaZ .J-N-JX.aA7,
+                        .btC .aaA.buc, .btC .J-N-JX.buc, .btC .aaA.BP, .aaZ .J-N-JX.BP,
+                        .btC .aaA.a5, .btC .aaA.a2X, .aaZ .J-N-JX.a5, .aaZ .J-N-JX.a2X,
+                        [role="toolbar"] [role="button"]:not(.H2):not(.Ol)
+                        {
+                            filter: invert(1) !important;
+                        }
+
+                        tr.aRp:hover {
+                            background-color: #333 !important;
+                        }
+
+                        div.nH.ao9.id.UG {
+                            background-color: #222222;
+                        }
+
+                        .x7, form[role="search"] .gssb_m tr:hover, .agJ:hover {
+                            background-color: #141313 !important;
+                        }
+
+                        .J-J5-Ji.btA [role="button"] {
+                            background-color: #111 !important;
+                        }
+
+                        /* spam button and notice */
+                        .bzx, .bzr:hover {
+                            background-color: #222;
+                            color: #cccccd;
+                        }
+
+                        /* Overall Background */
+                        .iY, .iY .Bu { background: transparent !important }
+
+                        /* Star */
+                        .bi4 > .T-KT:not(.T-KT-Jp):not(.byM)::before { background-image: url("https://www.gstatic.com/images/icons/material/system/1x/star_border_white_20dp.png") !important }
+
+                        /* Reply */
+                        .hB, /* Inline */
+                        .mL /* In ... menu */
+                        {
+                            background-image: url("https://www.gstatic.com/images/icons/material/system/1x/reply_white_20dp.png") !important }
+
+                        /* Reply All */
+                        .mK { background-image: url("https://www.gstatic.com/images/icons/material/system/1x/reply_all_white_20dp.png") !important }
+
+                        /* Forward (In ... menu) */
+                        .mI { background-image: url("https://www.gstatic.com/images/icons/material/system/1x/forward_white_20dp.png") !important }
+                    `;
+                    document.head.appendChild(this._paneStyleElement);
+                }
             },
             destroy() {
                 this._styleElement?.remove();
                 this._styleElement = null;
                 this._loadingStyleElement?.remove();
                 this._loadingStyleElement = null;
+                this._paneStyleElement?.remove();
+                this._paneStyleElement = null;
             },
         },
 
@@ -1323,9 +1479,9 @@
                 this._styleElement = document.createElement('style');
                 this._styleElement.id = 'gm-hide-reactions';
                 this._styleElement.textContent = `
-                    button[aria-label="Add reaction"], 
-                    div.wrsVRe { 
-                        display: none !important; 
+                    button[aria-label="Add reaction"],
+                    div.wrsVRe {
+                        display: none !important;
                     }
                 `;
                 document.head.appendChild(this._styleElement);
@@ -1460,13 +1616,13 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v6.5';
+        version.textContent = 'v6.9';
         header.append(title, version);
 
         const main = document.createElement('main');
         const groupOrder = ['UI & Visuals', 'Themes', 'Layout', 'Header Elements', 'Email Thread Declutter', 'Productivity', 'Hubspot', 'AI & Tools', 'Declutter'];
 
-        const createSubSetting = (id, name, description, parentInput) => {
+        const createSubSetting = (id, name, description, parentInput, parentFeatureId) => {
             const wrapper = document.createElement('div');
             wrapper.className = 'gm-switch-wrapper gm-sub-setting-wrapper';
             wrapper.dataset.tooltip = description;
@@ -1479,10 +1635,12 @@
             input.checked = appState.settings[id];
             input.onchange = async (e) => {
                 appState.settings[id] = e.target.checked;
-                const parentFeat = features.find(x => x.id === 'nukeReplyMetadata');
-                parentFeat.destroy();
-                if (appState.settings.nukeReplyMetadata) {
-                    parentFeat.init();
+                const parentFeat = features.find(x => x.id === parentFeatureId);
+                if (parentFeat) {
+                    parentFeat.destroy();
+                    if (appState.settings[parentFeatureId]) {
+                        parentFeat.init();
+                    }
                 }
                 await settingsManager.save(appState.settings);
             };
@@ -1547,11 +1705,16 @@
                 wrapper.append(label, nameSpan);
                 fieldset.appendChild(wrapper);
 
+                if (f.id === 'gmailDarkMode') {
+                    const paneSub = createSubSetting('gmailDarkModePane', "Darken email viewing pane", "Applies the dark theme to the content of individual emails.", input, 'gmailDarkMode');
+                    fieldset.append(paneSub);
+                }
+
                 if (f.id === 'nukeReplyMetadata') {
-                    const fromSub = createSubSetting('nukeReplyMetadataSimple', "Show simple 'From:' header", "Replaces the divider with a simple 'From: Name <email>' line.", input);
-                    const ccSub = createSubSetting('nukeReplyMetadataShowCc', "Show Cc:", "Also show the Cc: line if available.", input);
-                    const bccSub = createSubSetting('nukeReplyMetadataShowBcc', "Show Bcc:", "Also show the Bcc: line if available.", input);
-                    const pleasantriesSub = createSubSetting('nukeReplyMetadataRemovePleasantries', "Remove pleasantries (e.g., 'Thanks')", "Removes common closings from the end of emails.", input);
+                    const fromSub = createSubSetting('nukeReplyMetadataSimple', "Show simple 'From:' header", "Replaces the divider with a simple 'From: Name <email>' line.", input, 'nukeReplyMetadata');
+                    const ccSub = createSubSetting('nukeReplyMetadataShowCc', "Show Cc:", "Also show the Cc: line if available.", input, 'nukeReplyMetadata');
+                    const bccSub = createSubSetting('nukeReplyMetadataShowBcc', "Show Bcc:", "Also show the Bcc: line if available.", input, 'nukeReplyMetadata');
+                    const pleasantriesSub = createSubSetting('nukeReplyMetadataRemovePleasantries', "Remove pleasantries (e.g., 'Thanks')", "Removes common closings from the end of emails.", input, 'nukeReplyMetadata');
                     fieldset.append(fromSub, ccSub, bccSub, pleasantriesSub);
                 }
             });
@@ -1695,7 +1858,7 @@
         const bootstrapObserver = new MutationObserver((mutations, obs) => {
             if (document.querySelector('.nH.bkK')) {
                 obs.disconnect();
-                
+
                 // Initialize all features once the main UI is ready
                 injectStyles();
                 buildPanel(appState);
