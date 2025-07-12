@@ -1,4 +1,4 @@
-# MailPro-Enhancement-Suite
+# Gmail Premium Suite
 An unofficial enhancement extension for Gmail.
 
 ## Introduction
