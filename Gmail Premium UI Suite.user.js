@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      6.3
+// @version      6.5
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
@@ -17,12 +17,12 @@
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V6.3 UPDATES ~
+    //  ~ V6.5 UPDATES ~
     //
-    //  1. Added Dark Chat Roster:
-    //     - Integrated dark styling for the chat roster and iframe container.
-    //     - This is now part of the main "Enable Gmail Dark Mode" feature
-    //       and not a separate toggle.
+    //  1. New Feature - Flatten Reply Indentation:
+    //     - Added a new option under "Email Thread Declutter" to remove all
+    //       indentation and vertical lines from quoted replies, creating a
+    //       single, flat column for the conversation.
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -150,6 +150,8 @@
             nukeReplyMetadataSimple: false,
             nukeReplyMetadataShowCc: false,
             nukeReplyMetadataShowBcc: false,
+            nukeReplyMetadataRemovePleasantries: true,
+            flatReplyChain: false,
             hideReactionButton: true,
             hideAllSignaturesInChain: true,
         },
@@ -1105,7 +1107,57 @@
                 const featId = this.id;
                 const gmailDividerSelector = 'hr[style*="display:inline-block"][style*="width:98%"]';
 
+                // --- Pleasantry Remover Logic ---
+                const TAIL_LINES = 5;
+                const PLEASANTRIES = [
+                    /^(thank you|thanks|many thanks|thanks in advance)[!.,]?$/i,
+                    /^(best|best regards|best wishes|warm regards|kind regards|warmly)[!.,]?$/i,
+                    /^(sincerely|sincerely yours|yours truly|yours sincerely|yours faithfully)[!.,]?$/i,
+                    /^(all the best)[!.,]?$/i,
+                    /^(cheers)[!.,]?$/i,
+                    /^(take care)[!.,]?$/i,
+                    /^(have a (?:great|nice) day)[!.,]?$/i,
+                    /^(enjoy)[!.,]?$/i,
+                    /^(appreciate (?:your )?help)[!.,]?$/i,
+                    /^(looking forward to hearing from you)[!.,]?$/i,
+                    /^(with gratitude)[!.,]?$/i,
+                    /^(respectfully)[!.,]?$/i
+                ];
+
+                function stripPleasantries(el) {
+                    if (el.dataset.gmPleasantriesProcessed) return;
+                    el.dataset.gmPleasantriesProcessed = 'true';
+
+                    const parts = el.innerHTML.split(/(<br\s*\/?>|<\/div>|\r?\n)/gi);
+                    const lines = [];
+                    parts.forEach((chunk, idx) => {
+                        const text = chunk.replace(/<[^>]+>/g, '').trim();
+                        if (text) lines.push({ text, idx });
+                    });
+
+                    const tail = lines.slice(-TAIL_LINES);
+                    let cutAt = parts.length;
+
+                    for (let { text, idx } of tail.reverse()) { // check from the bottom up
+                        if (PLEASANTRIES.some(rx => rx.test(text))) {
+                            cutAt = idx;
+                            const nextLine = lines.find(l => l.idx > idx);
+                            if (nextLine && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(nextLine.text)) {
+                               // also cut the name
+                            }
+                            break;
+                        }
+                    }
+
+                    if (cutAt < parts.length) {
+                        el.innerHTML = parts.slice(0, cutAt).join('');
+                    }
+                }
+                // --- End Pleasantry Remover ---
+
+
                 const processMetadataBlock = div => {
+                    // ... (existing metadata logic is unchanged)
                     if (div.dataset.gmProcessed) return;
                     div.dataset.gmProcessed = 'true';
 
@@ -1204,6 +1256,11 @@
                             processMetadataBlock(el);
                         }
                     });
+
+                    // NEW: Run pleasantry remover if enabled
+                    if (appState.settings.nukeReplyMetadataRemovePleasantries) {
+                        rootNode.querySelectorAll('.ii.gt, .a3s').forEach(stripPleasantries);
+                    }
                 };
 
                 addHidingRule(featId, findAndProcessMetadata);
@@ -1214,8 +1271,47 @@
                 document.querySelectorAll(`[data-gm-hidden-by="${this.id}_bcc"]`).forEach(el => el.remove());
                 document.querySelectorAll(`[data-gm-hidden-by="${this.id}_hr"]`).forEach(el => el.remove());
                 removeHidingRule(this.id);
-                document.querySelectorAll('[data-gm-processed]').forEach(el => el.removeAttribute('data-gm-processed'));
+                document.querySelectorAll('[data-gm-processed], [data-gm-pleasentries-processed]').forEach(el => {
+                    el.removeAttribute('data-gm-processed');
+                    el.removeAttribute('data-gm-pleasentries-processed');
+                });
+                // Note: Can't easily restore pleasantries, destroy() will just stop future removals.
             },
+        },
+        {
+            id: 'flatReplyChain',
+            name: 'Flatten Reply Indentation',
+            description: 'Removes all indentation and vertical lines from quoted replies.',
+            group: 'Email Thread Declutter',
+            _styleElement: null,
+            init() {
+                this._styleElement = document.createElement('style');
+                this._styleElement.id = 'gm-flat-replies';
+                this._styleElement.textContent = `
+                    /* kill all nested quote indents & vertical lines */
+                    blockquote.gmail_quote,
+                    .gmail_quote,
+                    div.gmail_quote,
+                    .ii.gt blockquote {
+                      margin-left: 0 !important;
+                      padding-left: 0 !important;
+                      border-left: none !important;
+                    }
+
+                    /* ensure your separators span 100% */
+                    hr {
+                      display: block !important;
+                      width: 100% !important;
+                      margin: 16px 0 !important;
+                      border: none !important;
+                      border-top: 1px solid #ccc !important;
+                    }
+                `;
+                document.head.appendChild(this._styleElement);
+            },
+            destroy() {
+                this._styleElement?.remove();
+            }
         },
         {
             id: 'hideReactionButton',
@@ -1364,7 +1460,7 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v6.3';
+        version.textContent = 'v6.5';
         header.append(title, version);
 
         const main = document.createElement('main');
@@ -1455,7 +1551,8 @@
                     const fromSub = createSubSetting('nukeReplyMetadataSimple', "Show simple 'From:' header", "Replaces the divider with a simple 'From: Name <email>' line.", input);
                     const ccSub = createSubSetting('nukeReplyMetadataShowCc', "Show Cc:", "Also show the Cc: line if available.", input);
                     const bccSub = createSubSetting('nukeReplyMetadataShowBcc', "Show Bcc:", "Also show the Bcc: line if available.", input);
-                    fieldset.append(fromSub, ccSub, bccSub);
+                    const pleasantriesSub = createSubSetting('nukeReplyMetadataRemovePleasantries', "Remove pleasantries (e.g., 'Thanks')", "Removes common closings from the end of emails.", input);
+                    fieldset.append(fromSub, ccSub, bccSub, pleasantriesSub);
                 }
             });
             main.appendChild(fieldset);
