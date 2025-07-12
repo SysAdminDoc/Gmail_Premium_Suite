@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gmail Premium UI Suite
 // @namespace    https://github.com/SysAdminDoc/MailPro-Enhancement-Suite
-// @version      5.9
+// @version      6.3
 // @description  The ultimate Gmail revamp. Features a dynamic JS-based chat collapse, "nuclear" reply header removal, plus advanced signature hiding and UI tools.
 // @author       Matthew Parker
 // @match        https://mail.google.com/*
@@ -17,12 +17,12 @@
     'use strict';
 
     // ——————————————————————————————————————————————————————————————————————————
-    //  ~ V5.9 UPDATES ~
+    //  ~ V6.3 UPDATES ~
     //
-    //  1. Dark Loading Screen:
-    //     - Added a new feature to apply a dark theme to the initial Gmail
-    //       loading screen, preventing a flash of white for dark mode users.
-    //     - Changed @run-at to document-start to apply styles immediately.
+    //  1. Added Dark Chat Roster:
+    //     - Integrated dark styling for the chat roster and iframe container.
+    //     - This is now part of the main "Enable Gmail Dark Mode" feature
+    //       and not a separate toggle.
     //
     // ——————————————————————————————————————————————————————————————————————————
 
@@ -100,13 +100,13 @@
 
             // Themes
             gmailDarkMode: false,
-            darkLoadingScreen: true,
 
             // Layout
             customCSS: true,
             styleReplyButton: true,
             composeRecipientBorder: true,
             collapseChatSidebar: true,
+            hideChatWithHoverLip: false,
 
             // Productivity
             showEmail: true,
@@ -156,7 +156,7 @@
         async load() {
             let savedSettings = await GM_getValue('gmPremiumSettings', {});
             // Clean up old settings from previous versions
-            const oldKeys = ['hideReplyHeaders', 'hideSignaturesInReplies', 'hideDeviceSignatures', 'hideOutlookMobileSignature', 'hideReplyForwardMetadata', 'hideExternalSignatures', 'hideMySignatureInChains', 'mySignatureKeywords', 'themeToggle'];
+            const oldKeys = ['hideReplyHeaders', 'hideSignaturesInReplies', 'hideDeviceSignatures', 'hideOutlookMobileSignature', 'hideReplyForwardMetadata', 'hideExternalSignatures', 'hideMySignatureInChains', 'mySignatureKeywords', 'themeToggle', 'darkLoadingScreen'];
             oldKeys.forEach(key => {
                 if (savedSettings.hasOwnProperty(key)) {
                     delete savedSettings[key];
@@ -361,15 +361,50 @@
         {
             id: 'gmailDarkMode',
             name: 'Enable Gmail Dark Mode',
-            description: "Toggles Gmail's native dark theme by injecting its CSS file.",
+            description: "Toggles Gmail's native dark theme and applies a dark loading screen to prevent white flash.",
             group: 'Themes',
             _styleElement: null,
+            _loadingStyleElement: null,
+            preInit() {
+                // This part runs immediately at document-start to prevent the white flash
+                this._loadingStyleElement = document.createElement('style');
+                this._loadingStyleElement.id = 'gm-dark-loading-screen';
+                this._loadingStyleElement.textContent = `
+                  /* full-page dark underlay to prevent white flash */
+                  html, body {
+                    background-color: #121212 !important;
+                  }
+
+                  /* kill every CSS animation/transition */
+                  *, *::before, *::after {
+                    animation: none !important;
+                    transition: none !important;
+                  }
+
+                  /* override Gmail’s loader */
+                  #loading, #stb,
+                  .la-i > div,
+                  .la-k .la-m, .la-i > .la-m,
+                  .la-k .la-l, .la-k .la-r {
+                    background-color: #121212 !important;
+                    border: none !important;
+                  }
+
+                  /* loader text/links */
+                  .msg, .msgb,
+                  .submit_as_link, #loading a {
+                    color: #e0e0e0 !important;
+                  }
+                `;
+                (document.head || document.documentElement).appendChild(this._loadingStyleElement);
+            },
             init() {
+                // This part runs after the main Gmail UI is stable
                 if (this._styleElement) return;
                 this._styleElement = document.createElement('style');
                 this._styleElement.id = 'gm-native-dark-theme';
-                document.head.appendChild(this._styleElement);
 
+                // Fetch and apply Gmail's native dark theme
                 const CSS_URL = 'https://mail.google.com/_/scs/mail-static/_/ss/k=gmail.main.C6cicS7fXaU.L.W.O/am=qAEDHAAA-MDlf76A_0qMPQAADPjX-f7VB_7Mb3huMgSy4CECRgQSBegDIhMFfyLy4XWs2-Ay7OMPCQAIQLsjm_04SIQtNH7UOoROacJlGAEAAAAAAAAAAAAAAAAAAAAeHgIC/d=1/excm=at/rs=AHGWq9DdJea2KTVAzJaogOueR9p3iW7rWQ';
 
                 GM_xmlhttpRequest({
@@ -388,34 +423,33 @@
                         showToast('Error fetching dark mode CSS.', true);
                     }
                 });
+
+                // Add dark chat roster styles
+                this._styleElement.textContent += `
+                    /* parent Gmail frame: roster + container */
+                    #talk_roster, .VK.s.ik, .aay {
+                        background-color: #121212 !important;
+                        color: #e0e0e0 !important;
+                    }
+                    /* borders */
+                    #talk_roster, .VK.s.ik {
+                        border-color: #333 !important;
+                    }
+                    /* iframe container */
+                    #gtn-roster-iframe-id {
+                        background-color: #121212 !important;
+                        border: none !important;
+                    }
+                `;
+
+                 document.head.appendChild(this._styleElement);
             },
             destroy() {
                 this._styleElement?.remove();
                 this._styleElement = null;
+                this._loadingStyleElement?.remove();
+                this._loadingStyleElement = null;
             },
-        },
-        {
-            id: 'darkLoadingScreen',
-            name: 'Dark Loading Screen',
-            description: 'Applies a dark theme to the initial loading screen to prevent a white flash.',
-            group: 'Themes',
-            _styleElement: null,
-            init() {
-                this._styleElement = document.createElement('style');
-                this._styleElement.id = 'gm-dark-loading-screen';
-                this._styleElement.textContent = `
-                    #loading, #stb {
-                        background-color: #1f1f1f !important;
-                    }
-                    .msg, .msgb, #loading a {
-                        color: #ccc !important;
-                    }
-                `;
-                (document.head || document.documentElement).appendChild(this._styleElement);
-            },
-            destroy() {
-                this._styleElement?.remove();
-            }
         },
 
         // Group: Layout
@@ -485,13 +519,14 @@
         {
             id: 'collapseChatSidebar',
             name: 'Collapse Chat Sidebar',
+            description: 'Shrinks the chat/navigation sidebar to a minimal icon-only bar.',
             group: 'Layout',
             _observer: null,
             init() {
                 const COLLAPSED_WIDTH = 56; // px
 
                 function updateCollapse() {
-                    const mailLink = document.querySelector('a[aria-label="Mail"]');
+                    const mailLink = document.querySelector('div[role="link"][aria-label^="Mail"]');
                     const mainPanel = document.querySelector('div[role="main"]');
                     if (!mailLink || !mainPanel) return;
 
@@ -499,10 +534,6 @@
                     if (navPanel) {
                         navPanel.style.width = `${COLLAPSED_WIDTH}px`;
                         navPanel.style.minWidth = `${COLLAPSED_WIDTH}px`;
-                    }
-                    const wrapper = navPanel?.parentElement;
-                    if (wrapper) {
-                        mainPanel.style.marginLeft = `${COLLAPSED_WIDTH}px`;
                     }
                 }
                 updateCollapse();
@@ -512,15 +543,63 @@
             destroy() {
                 this._observer?.disconnect();
                 this._observer = null;
-                document.querySelectorAll('a[aria-label="Mail"]').forEach(mailLink => {
-                    const navPanel = mailLink.closest('div[role="navigation"], aside');
-                    if (navPanel) {
-                        navPanel.style.width = '';
-                        navPanel.style.minWidth = '';
+                 const mailLink = document.querySelector('div[role="link"][aria-label^="Mail"]');
+                 if(!mailLink) return;
+                 const navPanel = mailLink.closest('div[role="navigation"], aside');
+                 if (navPanel) {
+                     navPanel.style.width = '';
+                     navPanel.style.minWidth = '';
+                 }
+            }
+        },
+        {
+            id: 'hideChatWithHoverLip',
+            name: 'Hover to Reveal Chat',
+            description: 'Hides the chat/nav panel completely, revealing it on hover over a left-side "lip".',
+            group: 'Layout',
+            _styleElement: null,
+            init() {
+                this._styleElement = document.createElement('style');
+                this._styleElement.id = 'gm-hide-chat-hover';
+                this._styleElement.textContent = `
+                    .aeN.WR.a6o {
+                        position: fixed !important;
+                        left: 0;
+                        top: 64px; /* Adjust based on header height */
+                        height: calc(100vh - 64px) !important;
+                        z-index: 1001;
+                        transform: translateX(calc(-100% + 5px));
+                        transition: transform 0.25s ease-in-out;
+                        border-right: 1px solid #d3d3d3;
                     }
-                });
-                const mainPanel = document.querySelector('div[role="main"]');
-                if (mainPanel) mainPanel.style.marginLeft = '';
+                    .aeN.WR.a6o::after {
+                        content: '';
+                        position: absolute;
+                        right: 0;
+                        top: 0;
+                        width: 5px;
+                        height: 100%;
+                        background: #5e97f6;
+                        cursor: pointer;
+                        opacity: 0.7;
+                        transition: opacity 0.2s;
+                    }
+                    .aeN.WR.a6o:hover {
+                        transform: translateX(0);
+                        box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+                    }
+                     .aeN.WR.a6o:hover::after {
+                        opacity: 1;
+                    }
+                    /* Adjust main content padding to account for hidden bar */
+                    .bkK>.nH.oy8Mbf, .brC-aT5-aOt-I.brC-aT5-aOt-I {
+                        padding-left: 15px !important;
+                    }
+                `;
+                document.head.appendChild(this._styleElement);
+            },
+            destroy() {
+                this._styleElement?.remove();
             }
         },
 
@@ -1285,11 +1364,11 @@
         title.textContent = 'Gmail Premium Suite';
         const version = document.createElement('span');
         version.className = 'version';
-        version.textContent = 'v5.9';
+        version.textContent = 'v6.3';
         header.append(title, version);
 
         const main = document.createElement('main');
-        const groupOrder = ['UI & Visuals', 'Themes', 'Header Elements', 'Email Thread Declutter', 'Layout', 'Productivity', 'Hubspot', 'AI & Tools', 'Declutter'];
+        const groupOrder = ['UI & Visuals', 'Themes', 'Layout', 'Header Elements', 'Email Thread Declutter', 'Productivity', 'Hubspot', 'AI & Tools', 'Declutter'];
 
         const createSubSetting = (id, name, description, parentInput) => {
             const wrapper = document.createElement('div');
@@ -1350,9 +1429,15 @@
                     const id = e.target.dataset.featureId;
                     appState.settings[id] = e.target.checked;
                     const feat = features.find(x => x.id === id);
-                    feat.destroy();
+                    if (feat.destroy) {
+                        feat.destroy();
+                    }
                     if (appState.settings[id]) {
-                        feat.init();
+                        // For dark mode, preInit is handled separately on page load,
+                        // so here we only need to call init.
+                        if (feat.init) {
+                            feat.init();
+                        }
                     }
                     await settingsManager.save(appState.settings);
                 };
@@ -1501,26 +1586,28 @@
     async function main() {
         appState.settings = await settingsManager.load();
 
-        // The dark loading screen needs to run immediately, before the full UI loads
-        if (appState.settings.darkLoadingScreen) {
-            features.find(f => f.id === 'darkLoadingScreen').init();
+        // Because @run-at is document-start, run the dark mode PRE-INITIALIZER
+        // immediately to apply the dark loading screen and prevent flashing.
+        if (appState.settings.gmailDarkMode) {
+            const darkModeFeat = features.find(f => f.id === 'gmailDarkMode');
+            if (darkModeFeat && darkModeFeat.preInit) {
+               darkModeFeat.preInit();
+            }
         }
 
         const bootstrapObserver = new MutationObserver((mutations, obs) => {
             if (document.querySelector('.nH.bkK')) {
                 obs.disconnect();
                 
-                // Initialize all other features once the main UI is ready
+                // Initialize all features once the main UI is ready
                 injectStyles();
                 buildPanel(appState);
 
                 features.forEach(f => {
-                    // Skip the dark loading screen since it's already running
-                    if (f.id === 'darkLoadingScreen') return;
-
+                    // Now, the main init() for all enabled features can run safely
                     if (appState.settings[f.id]) {
                         try {
-                            f.init();
+                            if (f.init) f.init();
                         } catch (error) {
                             console.error(`[Gmail Premium] Error initializing feature "${f.id}":`, error);
                         }
